@@ -1,21 +1,23 @@
-//Line Follower Integration with Motor Control + Watchdog Timer
+// Line Follower + Motor Control + Analog Thresholds
+// For Arduino Due
 // Team Kobe - SYSC4805
-// Motors: DIR/EN pins
-// Sensors: OUT1->30, OUT2->31, OUT3->32
 
-#include <avr/wdt.h> // Include watchdog timer library
+// === Motor pins ===
+const int dirPins[4] = {22, 24, 26, 28}; // Direction control pins
+const int enPins[4]  = {A3, A5, A7, A9}; // Power pins
 
-// Motor pins
-const int dirPins[4] = {22, 24, 26, 28}; //pins that set direction control to the motors
-const int enPins[4]  = {23, 25, 27, 29}; //Power pins for the motors 
+// === Sensor pins (analog inputs) ===
+const int LFS_L = A0; // Left sensor
+const int LFS_M = A1; // Middle sensor
+const int LFS_R = A2; // Right sensor
 
-// Sensor pins
-const int LFS_L = 30;
-const int LFS_M = 31;
-const int LFS_R = 32;
+// === Sensor thresholds ===
+const int THRESHOLD_L = 980;   // Adjust these based on your surface
+const int THRESHOLD_M = 980;
+const int THRESHOLD_R = 980;
 
-unsigned long lastLoopTime = 0;
-const unsigned long LOOP_TIMEOUT_MS = 1500; // Safety margin for loop timing
+// Optional: small delay for stability
+const int LOOP_DELAY_MS = 200;
 
 void setup() {
   // Initialize motors
@@ -25,63 +27,107 @@ void setup() {
     digitalWrite(enPins[i], LOW); // Motors off at startup
   }
 
-  // Initialize sensors
-  pinMode(LFS_L, INPUT);
-  pinMode(LFS_M, INPUT);
-  pinMode(LFS_R, INPUT);
-
+  // Serial for debugging
   Serial.begin(9600);
   while (!Serial) {}
-
-  Serial.println("=== Line Follower + Motor + Watchdog Test ===");
-
-  //Enable Watchdog Timer (2 seconds)
-  wdt_enable(WDTO_2S);
-  Serial.println("Watchdog Timer Enabled (2s)");
+  Serial.println("=== Line Follower + Motor + Analog Thresholds ===");
 }
 
 void loop() {
-  //Watchdog Reset
-  wdt_reset(); // prevents watchdog from resetting if loop runs correctly
+  // Read raw analog values
+  int leftRaw   = analogRead(LFS_L);
+  int middleRaw = analogRead(LFS_M);
+  int rightRaw  = analogRead(LFS_R);
 
-  // Read sensors
-  int left   = digitalRead(LFS_L);
-  int middle = digitalRead(LFS_M);
-  int right  = digitalRead(LFS_R);
+  // Print raw values
+  Serial.print("Raw Sensors >> Left: "); Serial.print(leftRaw);
+  Serial.print(" Mid: "); Serial.print(middleRaw);
+  Serial.print(" Right: "); Serial.println(rightRaw);
 
-  Serial.print("Sensors >> Left: ");
-  Serial.print(left);
-  Serial.print("  Mid: ");
-  Serial.print(middle);
-  Serial.print("  Right: ");
-  Serial.println(right);
+  // Compare against thresholds
+  bool leftDetected   = leftRaw > THRESHOLD_L;
+  bool middleDetected = middleRaw > THRESHOLD_M;
+  bool rightDetected  = rightRaw > THRESHOLD_R;
 
-  // If ANY sensor reads 0 → STOP
-  if (left == 0 || middle == 0 || right == 0) {
-    Serial.println("At least one sensor LOW → STOP");
+if (leftDetected || middleDetected || rightDetected) {
+    // Line detected → stop, wait, then reverse
+    Serial.println("Line detected → Stop");
     stopMotors();
-  } else {
-    Serial.println("All HIGH → Move Forward");
+    delay(1000);
+
+    Serial.println("Reversing...");
+    reverseMotors();
+    delay(500);
+
+    Serial.println("Turning Right...");
+    turnRight();
+    delay(700);   // adjust this for how much you want to pivot
+    stopMotors();
+    delay(500);
+
+
+
+    // After reversing, check sensors again
+    if (!(leftDetected || middleDetected || rightDetected)) {
+        Serial.println("No line detected → Forward");
+        forwardMotors();
+    } else {
+        Serial.println("Line still detected → Stay stopped");
+        stopMotors();
+    }
+} else {
+    // No line detected → keep moving forward
+    Serial.println("No line detected → Forward");
     forwardMotors();
-  }
-
-  delay(200); // small delay for stability
-  lastLoopTime = millis();
-
-  // Optional loop timeout check
-  // If main loop exceeds watchdog interval (2s), the system will reset automatically.
 }
 
-// Motor helper functions
+
+  delay(LOOP_DELAY_MS); // small delay for stability
+}
+
+// ===== Motor helper functions =====
 void forwardMotors() {
-  digitalWrite(dirPins[0], HIGH); digitalWrite(enPins[0], HIGH);
-  digitalWrite(dirPins[1], HIGH); digitalWrite(enPins[1], HIGH);
-  digitalWrite(dirPins[2], LOW);  digitalWrite(enPins[2], HIGH);
-  digitalWrite(dirPins[3], LOW);  digitalWrite(enPins[3], HIGH);
+  digitalWrite(dirPins[0], LOW);
+  analogWrite(enPins[0], 255);
+  digitalWrite(dirPins[1], LOW);
+  analogWrite(enPins[1], 255);
+  digitalWrite(dirPins[2], HIGH);
+  analogWrite(enPins[2], 255);
+  digitalWrite(dirPins[3], HIGH);
+  analogWrite(enPins[3], 255);
+}
+
+void reverseMotors() {
+  digitalWrite(dirPins[0],  HIGH);
+  analogWrite(enPins[0], 255);
+  digitalWrite(dirPins[1], HIGH);
+  analogWrite(enPins[1], 255);
+  digitalWrite(dirPins[2], LOW);
+  analogWrite(enPins[2], 255);
+  digitalWrite(dirPins[3], LOW);
+  analogWrite(enPins[3], 255);
 }
 
 void stopMotors() {
   for (int i = 0; i < 4; i++) {
-    digitalWrite(enPins[i], LOW);
+    analogWrite(enPins[i], 0);
   }
 }
+
+void turnRight() {
+  // Left motors forward
+  digitalWrite(dirPins[0], LOW);
+  analogWrite(enPins[0], 255);
+  digitalWrite(dirPins[1], LOW);
+  analogWrite(enPins[1], 255);
+
+  // Right motors reverse
+  digitalWrite(dirPins[2], LOW);
+  analogWrite(enPins[2], 255);
+  digitalWrite(dirPins[3], LOW);
+  analogWrite(enPins[3], 255);
+
+  Serial.println("Turning Right (pivot)...");
+}
+
+

@@ -18,11 +18,11 @@ const int LFS_M = A1; // Middle sensor
 const int LFS_R = A2; // Right sensor
 
 // Sensor thresholds
-const int THRESHOLD_L = 980;   // Adjust these based on your surface
+const int THRESHOLD_L = 980;  
 const int THRESHOLD_M = 980;
 const int THRESHOLD_R = 980;
 
-// Optional: small delay for stability
+// Small delay for stability
 const int LOOP_DELAY_MS = 200;
 
 // Forward declarations 
@@ -56,7 +56,7 @@ void loop() {
   // Feed watchdog
   WDT_Restart(WDT);
 
-  // === Read line sensors ===
+  //Read line sensors
   int leftRaw   = analogRead(LFS_L);
   int middleRaw = analogRead(LFS_M);
   int rightRaw  = analogRead(LFS_R);
@@ -78,7 +78,7 @@ void loop() {
   Serial.print("Left Distance: "); Serial.print(distanceLeft); Serial.print(" cm  ");
   Serial.print("Right Distance: "); Serial.print(distanceRight); Serial.println(" cm");
 
-  // === Priority: Line detection first
+  //Line detection first
   if (leftDetected || middleDetected || rightDetected) {
     Serial.println("Line detected → Stop");
     stopMotors();

@@ -80,15 +80,15 @@ void loop() {
 
   //Line detection first
   if (leftDetected || middleDetected || rightDetected) {
-    Serial.println("Line detected → Stop");
+    Serial.println("Line detected - Stop");
     stopMotors();
     delay(1000);
 
-    Serial.println("Reversing...");
+    Serial.println("Reversing");
     reverseMotors();
     delay(500);
 
-    Serial.println("Turning Right...");
+    Serial.println("Turning Right");
     turnRight();
     delay(700);
     stopMotors();
@@ -104,30 +104,30 @@ void loop() {
                              (rightRaw > THRESHOLD_R);
 
     if (!lineStillDetected) {
-      Serial.println("No line detected → Forward");
+      Serial.println("No line detected -Forward");
       forwardMotors();
     } else {
-      Serial.println("Line still detected → Stay stopped");
+      Serial.println("Line still detected - Stay stopped");
       stopMotors();
     }
   }
   // Only check ultrasonic if no line
 else if (distanceLeft > 0 && distanceLeft < 50) {
-    Serial.println("Left obstacle → Turn Right");
+    Serial.println("Left obstacle - Turn Right");
     stopMotors(); delay(300);
     reverseMotors(); delay(500);
     turnRight(); delay(700);
     stopMotors(); delay(300);
 }
 else if (distanceRight > 0 && distanceRight < 50) {
-    Serial.println("Right obstacle → Turn Left");
+    Serial.println("Right obstacle - Turn Left");
     stopMotors(); delay(300);
     reverseMotors(); delay(500);
     turnLeft(); delay(700);
     stopMotors(); delay(300);
 }
 else {
-    Serial.println("Path clear → Forward");
+    Serial.println("Path clear - Forward");
     forwardMotors();
 }
 
@@ -176,7 +176,7 @@ void turnRight() {
   digitalWrite(dirPins[3], LOW);
   analogWrite(enPins[3], 255);
 
-  Serial.println("Turning Right (pivot)...");
+  Serial.println("Turning Right (pivot)");
 }
 void turnLeft() {
   // Right motors forward
@@ -191,7 +191,7 @@ void turnLeft() {
   digitalWrite(dirPins[1], HIGH);
   analogWrite(enPins[1], 255);
 
-  Serial.println("Turning Left (pivot)...");
+  Serial.println("Turning Left (pivot)");
 }
 // Ultrasonic helper 
 long getDistanceCM(int trig, int echo) {

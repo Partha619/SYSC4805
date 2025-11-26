@@ -1,21 +1,23 @@
-// Line Follower + Motor Control + Analog Thresholds
+#include <watchdog.h> 
 // For Arduino Due
 // Team Kobe - SYSC4805
 
-// === Motor pins ===
+// Motor pins
 const int dirPins[4] = {22, 24, 26, 28}; // Direction control pins
 const int enPins[4]  = {A3, A5, A7, A9}; // Power pins
 
-// === Ultrasonic sensor pins ===
-const int trigPin = 30;
-const int echoPin = 31;
+// Ultrasonic sensor pins 
+const int trigPinRight  = 30;
+const int echoPinRight  = 31;
+const int trigPinLeft = 32;
+const int echoPinLeft = 33;
 
-// === Sensor pins (analog inputs) ===
+// Sensor pins (analog inputs)
 const int LFS_L = A0; // Left sensor
 const int LFS_M = A1; // Middle sensor
 const int LFS_R = A2; // Right sensor
 
-// === Sensor thresholds ===
+// Sensor thresholds
 const int THRESHOLD_L = 980;   // Adjust these based on your surface
 const int THRESHOLD_M = 980;
 const int THRESHOLD_R = 980;
@@ -23,7 +25,7 @@ const int THRESHOLD_R = 980;
 // Optional: small delay for stability
 const int LOOP_DELAY_MS = 200;
 
-// ---- Forward declarations ----
+// Forward declarations 
 long getDistanceCM();
 
 void setup() {
@@ -35,23 +37,32 @@ void setup() {
   }
 
   // Ultrasonic pins
-  pinMode(trigPin, OUTPUT);
-  pinMode(echoPin, INPUT);
+  pinMode(trigPinLeft, OUTPUT);
+  pinMode(echoPinLeft, INPUT);
+  pinMode(trigPinRight, OUTPUT);
+  pinMode(echoPinRight, INPUT);
+
 
   // Serial for debugging
   Serial.begin(9600);
   while (!Serial) {}
-  Serial.println("=== Line Follower + Motor + Analog Thresholds ===");
+  Serial.println("Test Start");
+
+  WDT_Enable(WDT, WDT_MR_WDV(5000) | WDT_MR_WDRSTEN | WDT_MR_WDDBGHLT);
+
 }
 
 void loop() {
-  // Read raw analog values
+  // Feed watchdog
+  WDT_Restart(WDT);
+
+  // === Read line sensors ===
   int leftRaw   = analogRead(LFS_L);
   int middleRaw = analogRead(LFS_M);
   int rightRaw  = analogRead(LFS_R);
 
   // Print raw values
-  Serial.print("Raw Sensors >> Left: "); Serial.print(leftRaw);
+  Serial.print("Left: "); Serial.print(leftRaw);
   Serial.print(" Mid: "); Serial.print(middleRaw);
   Serial.print(" Right: "); Serial.println(rightRaw);
 
@@ -61,18 +72,14 @@ void loop() {
   bool rightDetected  = rightRaw > THRESHOLD_R;
 
   // Ultrasonic distance
-  long distance = getDistanceCM();
-  Serial.print("Distance: "); Serial.print(distance); Serial.println(" cm"); // <-- semicolon fixed
+  long distanceLeft  = getDistanceCM(trigPinLeft, echoPinLeft);
+  long distanceRight = getDistanceCM(trigPinRight, echoPinRight);
 
-  if (distance > 0 && distance < 40) { // obstacle avoidance first
-    Serial.println("Obstacle detected → Avoid");
-    stopMotors(); delay(300);
-    reverseMotors(); delay(500);
-    turnRight(); delay(700);
-    stopMotors(); delay(300);
-  }
-  else if (leftDetected || middleDetected || rightDetected) {
-    // Line detected → stop, wait, then reverse
+  Serial.print("Left Distance: "); Serial.print(distanceLeft); Serial.print(" cm  ");
+  Serial.print("Right Distance: "); Serial.print(distanceRight); Serial.println(" cm");
+
+  // === Priority: Line detection first
+  if (leftDetected || middleDetected || rightDetected) {
     Serial.println("Line detected → Stop");
     stopMotors();
     delay(1000);
@@ -83,11 +90,11 @@ void loop() {
 
     Serial.println("Turning Right...");
     turnRight();
-    delay(700);   // adjust this for how much you want to pivot
+    delay(700);
     stopMotors();
     delay(500);
 
-    // Re-check sensors (fresh read recommended)
+    // Re-check sensors
     leftRaw   = analogRead(LFS_L);
     middleRaw = analogRead(LFS_M);
     rightRaw  = analogRead(LFS_R);
@@ -103,16 +110,31 @@ void loop() {
       Serial.println("Line still detected → Stay stopped");
       stopMotors();
     }
-  } else {
-    // No line detected → keep moving forward
-    Serial.println("No line detected → Forward");
-    forwardMotors();
   }
+  // Only check ultrasonic if no line
+else if (distanceLeft > 0 && distanceLeft < 50) {
+    Serial.println("Left obstacle → Turn Right");
+    stopMotors(); delay(300);
+    reverseMotors(); delay(500);
+    turnRight(); delay(700);
+    stopMotors(); delay(300);
+}
+else if (distanceRight > 0 && distanceRight < 50) {
+    Serial.println("Right obstacle → Turn Left");
+    stopMotors(); delay(300);
+    reverseMotors(); delay(500);
+    turnLeft(); delay(700);
+    stopMotors(); delay(300);
+}
+else {
+    Serial.println("Path clear → Forward");
+    forwardMotors();
+}
 
   delay(LOOP_DELAY_MS); // small delay for stability
 }
 
-// ===== Motor helper functions =====
+// Motor helper functions
 void forwardMotors() {
   digitalWrite(dirPins[0], LOW);
   analogWrite(enPins[0], 255);
@@ -156,27 +178,40 @@ void turnRight() {
 
   Serial.println("Turning Right (pivot)...");
 }
+void turnLeft() {
+  // Right motors forward
+  digitalWrite(dirPins[2], HIGH);
+  analogWrite(enPins[2], 255);
+  digitalWrite(dirPins[3], HIGH);
+  analogWrite(enPins[3], 255);
 
-// ===== Ultrasonic helper =====
-long getDistanceCM() {
+  // Left motors reverse (pivot)
+  digitalWrite(dirPins[0], HIGH);
+  analogWrite(enPins[0], 255);
+  digitalWrite(dirPins[1], HIGH);
+  analogWrite(enPins[1], 255);
+
+  Serial.println("Turning Left (pivot)...");
+}
+// Ultrasonic helper 
+long getDistanceCM(int trig, int echo) {
   // Send 10 µs trigger pulse
-  digitalWrite(trigPin, LOW);
+  digitalWrite(trig, LOW);
   delayMicroseconds(2);
-  digitalWrite(trigPin, HIGH);
+  digitalWrite(trig, HIGH);
   delayMicroseconds(10);
-  digitalWrite(trigPin, LOW);
+  digitalWrite(trig, LOW);
 
   // Measure echo pulse width (add timeout to avoid blocking)
-  unsigned long duration = pulseIn(echoPin, HIGH, 30000UL); // 30 ms timeout ~ 5m range
+  unsigned long duration = pulseIn(echo, HIGH, 30000UL); // 30 ms timeout ~ 5m range
 
   if (duration == 0) {
-    // No echo detected within timeout
-    return -1; // indicates invalid reading
+    return -1; // invalid reading
   }
 
   // Convert to distance (speed of sound = 343 m/s)
-  // duration is in microseconds; 0.0343 cm/us is the one-way speed
   long distance = (long)(duration * 0.0343 / 2.0); // cm
-
   return distance;
 }
+
+
